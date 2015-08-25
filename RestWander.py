@@ -12,7 +12,6 @@ import json
 app = Flask(__name__)
 frequency = None
 tokenizer = None
-client = None
 
 def initialize ():
 
@@ -25,12 +24,6 @@ def initialize ():
                 frequency[l] = l
 
     tokenizer = RegexpTokenizer(r'\w+')
-    client = Elasticsearch('localhost')
-
-def filterpositives (seq):
-    for tuple in seq:
-        if len(tuple[1]) > 1 or "!" in tuple[0]: yield tuple[0]
-
 
 @app.route('/')
 def hello_world():
@@ -40,6 +33,7 @@ def hello_world():
 @Snippets.crossdomain(origin='*')
 def positivestatements(id):
 
+    client = Elasticsearch('http://137.135.93.224:9200')
 
     response = client.search (index="blogs",
         body={
@@ -54,7 +48,7 @@ def positivestatements(id):
 
     if (len(response['hits']['hits']) == 1):
 
-        text = str(response['hits']['hits'][0]['fields']['body']).replace (u'\\xa0', ' ').replace(u'\\n', '')
+        text = unicode(response['hits']['hits'][0]['fields']['body'][0])
 
         sentences = nltk.sent_tokenize(text.lower())
 
@@ -68,16 +62,15 @@ def positivestatements(id):
                if frequency.has_key(token):
                 positives.append(token)
 
+            if (sentence.endswith('!')):
+                positives.append('!')
+
             if len(positives) > 0:
                 positivesentences.append((sentence, positives))
 
+        positivesentences = sorted(positivesentences, key=lambda t: len(t[0]) * -1 * len (t[1]))
 
-        ratio = len(positivesentences) * 1.0 / (len(sentences) * 1.0)
-
-        if ratio > 0.333:
-            return json.dumps(list(filterpositives(positivesentences)))
-        else:
-            return json.dumps([tuple[0] for tuple in positivesentences])
+        return json.dumps([tuple[0] for tuple in positivesentences] [0:5], ensure_ascii=False, encoding='utf16')
     else:
         return "Id Not Found"
 
